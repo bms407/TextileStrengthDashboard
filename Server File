@@ -70,7 +70,7 @@ server <- function(input, output,session) {
     leng<-sees$Length
     lds<-sees$LD
     Strain1<-(LEdata1$Extension-input$LEplot_brush$xmin)/(leng + input$LEplot_brush$xmin)
-    Tenacity1<-108.963*(LEdata1$Load/lds) 
+    Tenacity1<-(LEdata1$Load(980.665)/(lds/9) 
     da<-data.frame(Strain1=Strain1, Tenacity1=Tenacity1)
   })
   
