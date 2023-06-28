@@ -1,0 +1,146 @@
+#Now we will open the server where we will populate the UI formatting
+server <- function(input, output,session) {
+  #First react to the input or a .raw or .csv file from collaborators - only populates when a file is selected
+  #it will also repopulate all fields if you select a new slide
+  input_file <- reactive({
+    
+    if (is.null(input$file)) {
+      return("")
+    }
+    # actually read the file and permutate it to be in the right format
+    sample3<-read.csv(input$file$datapath,sep=",",skip=64)
+    loadextension3<-data.frame(Extension=sample3$Extension.mm,Load=sample3$Load.kgf)
+    loadextension3<-mutate_all(loadextension3,function(x) as.numeric(as.character(x)))
+    loadextension3<-na.omit(loadextension3)
+  })
+  
+
+
+  #Store reactive values for elongation and load 
+ d<-reactive({
+   req(input$file)
+   ggplot(data=input_file(),aes(x=Extension, y=Load))+
+     geom_line()+
+     geom_point()+
+     labs(x="Extension",y="Load")
+ }) 
+ 
+ #graph the plot of Elongation and Load from your input file
+ output$LEplot<-renderPlot({
+   req(input$file)
+   d()
+ })
+
+  #Print values that correspond to your selection of this graph
+  output$info = renderText({
+    req(input$LEplot_brush)
+    xy_range_str <- function(e) {
+      if(is.null(e)) return("NULL\n")
+      paste0("xmin=", round(e$xmin, 3), " xmax=", round(e$xmax, 3), 
+             " ymin=", round(e$ymin, 3), " ymax=", round(e$ymax, 3))
+      #paste0("xmin = ", input$LEplot_click$x, "\ny = ", input$LEplot_click$y)
+    }
+    paste0(
+      "range:",xy_range_str(input$LEplot_brush))
+  })
+  
+  #create download of Extension and Load
+  output$LEplot_download<-(downloadHandler(
+    filename= function(){paste("LEplot",'.png',sep='')},
+    content=function(file){
+      ggsave(file,plot=d())
+    }
+  ))
+  
+  #create a reactive variable to store length and load values from your input
+  c<-reactive({
+    req(input$file)
+    constants<-read.csv(input$file$datapath,sep=",")
+    ld<-as.numeric(constants$Tension[constants$Test.Type=="Linear density"])
+    len<-as.numeric(constants$Tension[constants$Test.Type=="Length"])
+    df5<-data.frame(Length=len,LD=ld)
+  })
+  #save reactive data to calculate Tenacity vs strain 
+  #derived from Extension and Load numbers
+  p <-reactive({
+    req(input$file)
+    req(input$LEplot_brush)
+    LEdata1<-input_file()%>% filter_at(vars(starts_with("E")),any_vars((input$LEplot_brush$xmin<= .&.<= input$LEplot_brush$xmax)))
+    sees<-c()
+    leng<-sees$Length
+    lds<-sees$LD
+    Strain1<-(LEdata1$Extension-input$LEplot_brush$xmin)/(leng + input$LEplot_brush$xmin)
+    Tenacity1<-108.963*(LEdata1$Load/lds) 
+    da<-data.frame(Strain1=Strain1, Tenacity1=Tenacity1)
+  })
+  
+  ##Save the reactive data for the Tenacity vs strain plot
+  testssplot<-reactive({
+    req(p())
+    ggplot(data=p(),aes(Strain1,Tenacity1))+
+      geom_line()+
+      geom_point()+
+      labs(x="Strain",y="Tenacity (cN/tex)")
+  })
+  
+  #Graph the tenacity vs strain plot
+  output$SSplot<- renderPlot({
+    req(input$file)
+    testssplot()
+  })
+  
+  #Create download of the Tenacity vs Strain graph
+  output$SSplot_download<-(downloadHandler(
+    filename= function(){paste("SSplot",'.png',sep='')},
+    content=function(file){
+      ggsave(file,plot=testssplot())
+    }
+  ))
+  
+  #print Yield value based on double click event
+  output$Slope= renderText({
+    req(input$SSplot_click)
+    paste0("Yield: x=",round(input$SSplot_click$x,5),"   y=",round(input$SSplot_click$y,5))
+  })
+  
+  #filter the linear regression data based on previous graph selection
+  q<-reactive({
+    req(input$SSplot_brush)
+    df6<-p() %>% filter_at(vars(starts_with("S")),any_vars((input$SSplot_brush$xmin<= .&.<= input$SSplot_brush$xmax)))
+  })
+  
+ #Save reactive data for linear regression
+  LMsplot<-reactive({
+    req(q())
+    ggplot(data=q(),aes(Strain1,Tenacity1))+
+      geom_line()+
+      geom_point()+
+      labs(x="Strain",y="Tenacity")+
+      stat_smooth(method="lm", col="blue")+
+      xlim(input$SSplot_brush$xmin,input$SSplot_brush$xmax)+
+      ylim(input$SSplot_brush$ymin,input$SSplot_brush$ymax)
+
+ })
+ 
+ #graph the data for linear regression
+  output$LMplot<-renderPlot({
+    req(input$file)
+    LMsplot()
+  })
+  #Get the linear regression information from the selected data
+  output$Linear = renderText({
+    lmrange<-q()
+    mod<-lm(data=lmrange, Tenacity1~Strain1)
+    cf<-coef(mod)
+    paste0("Intercept= ",round(cf[1],5) , " Slope= ",round(cf[2],5), 
+           " RSquared= ", summary(mod)$r.squared)
+  })
+  
+  #Download the last plot with linear regression
+  output$LMplot_download<-(downloadHandler(
+    filename= function(){paste("LMplot",'.png',sep='')},
+    content=function(file){
+      ggsave(file,plot=LMsplot())
+    }))
+}
+shinyApp(ui, server)
