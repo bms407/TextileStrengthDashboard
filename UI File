@@ -1,0 +1,44 @@
+library(shiny)
+library(ggplot2)
+library(shiny)
+library(shinydashboard)
+library(dplyr)
+library(tidyr)
+library(tidyselect)
+library(tidyverse)
+
+#Here we are setting up the aesthetics of the page, (layout, buttons and output)
+ui <- fluidPage(
+  #this is for the side bar where we can input a file as well as data we will need downstream
+  fluidRow(
+    column(12,
+           fileInput("file", "Choose CSV File",
+                     accept = c(
+                       "text/csv",
+                       "text/comma-separated-values,text/plain",
+                       ".csv",
+                       ".raw")
+           ),
+           tags$hr(),
+           #checkboxInput("header", "Header", TRUE)
+           
+    )),
+  #all of this is just for formatting of the page for each individual plot
+  fluidRow(
+    column(4,
+           #tableOutput("table"),
+           plotOutput("LEplot",click="LEplot_click",brush="LEplot_brush"),
+           verbatimTextOutput("info"),
+           downloadButton('LEplot_download','Download Plot')),
+    
+    column(4,
+           
+           plotOutput("SSplot",dblclick="SSplot_click",brush="SSplot_brush",hover="SSplot_hover"),
+           verbatimTextOutput("Slope"),
+           downloadButton('SSplot_download','Download Plot')),
+    column(4,
+           
+           plotOutput("LMplot", hover="LMplot_hover",click="LMplot_click"),
+           verbatimTextOutput("Linear"),
+           downloadButton('LMplot_download','Download Plot')))
+)
